@@ -22,3 +22,6 @@ xcuserdata/
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Local assistant notes (not part of the deliverable)
+CLAUDE.md
