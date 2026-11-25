@@ -31,7 +31,7 @@ xcodebuild test -project Iberia.xcodeproj -scheme Iberia \
 ```
 
 - **Unitarios** (`IberiaTests`, Swift Testing): Domain, Data, Presentation y localización. No usan red ni esperas reales.
-- **UI** (`IberiaUITests`, XCTest): auditorías de accesibilidad de Apple, en inglés y en español. Corren sin red: la app arranca con `-UITestStubbedSearch` (solo en compilaciones Debug) y usa canciones fijas.
+- **UI** (`IberiaUITests`, XCTest): auditorías de accesibilidad de Apple, en inglés. Corren sin red: la app arranca con `-UITestStubbedSearch` (solo en compilaciones Debug) y usa canciones fijas.
 - `Iberia.xctestplan` fija el idioma de los tests a inglés y desactiva la ejecución en paralelo. Los tests unitarios comparan textos en inglés, así que dependen de ese plan.
 
 ## Arquitectura
@@ -48,7 +48,7 @@ Iberia/
 
 - **Domain** no importa SwiftUI ni nada de red. Define los protocolos que Data implementa.
 - **Inyección de dependencias** por constructor, con protocolos. No hay singletons.
-- **Concurrencia (Swift 6):** las entidades son `struct` inmutables y `Sendable`, así viajan entre actores sin data races. La caché y el repositorio con caché son `actor`. El ViewModel es `@MainActor @Observable`.
+- **Concurrencia (Swift 6):** las entidades son `struct` inmutables y `Sendable`, así viajan entre actores sin data races. La caché es un `actor`. El ViewModel es `@MainActor @Observable`.
 - Cadena real: `URLSessionHTTPClient → ITunesSongRemoteDataSource → RemoteSongRepository → CachedSongRepository(SongMemoryCache) → DefaultSearchSongsUseCase → SearchViewModel → SearchView`.
 
 ## Decisiones principales
@@ -69,7 +69,18 @@ Iberia/
 - Entrada válida → se devuelve **sin llamada de red**. Ausente o expirada → red, y se actualiza la caché.
 - Solo se cachean respuestas correctas, nunca errores ni resultados de peticiones canceladas.
 - El tiempo viene de un reloj inyectable (`CacheClock`), así los tests comprueban la expiración en milisegundos.
-- Extras no pedidos por el enunciado: máximo de 50 entradas con desalojo de la menos usada, y las peticiones idénticas simultáneas comparten una sola llamada de red.
+- El decorador `CachedSongRepository` no tiene estado propio: espera directamente al repositorio que envuelve, así que cancelar la tarea que llama cancela toda la cadena hasta la petición de red (hay un test que lo demuestra con un `URLSession` real).
+
+### Qué no se ha hecho a propósito
+
+Dos mejoras habituales que se descartaron para mantener el código claro, porque el enunciado pide una prueba simple:
+
+- **No se agrupan las peticiones idénticas simultáneas** ("coalescencia": si llegan dos búsquedas iguales mientras una está en vuelo, compartir una sola llamada de red). Aquí no aportaría nada:
+  - El ViewModel cancela la búsqueda anterior en cada cambio de texto, y la nueva espera 300 ms de debounce. Cuando esta llega al repositorio, la anterior ya está cancelada: no se solapan.
+  - No hay otros consumidores (precarga, widgets, varias pantallas) que pidan la misma consulta a la vez. El único caso de solape es pulsar Enter con la red lenta y el mismo texto, y el coste es una petición repetida.
+  - Añadirla obligaría a compartir la tarea entre llamadores, con un contador de esperadores y cancelación manual. Sin ella, la cancelación la resuelve la concurrencia estructurada y es mucho más fácil de razonar.
+  - Si la app tuviera varios consumidores de la misma consulta, sería el momento de añadirla.
+- **No hay límite de tamaño en la caché** (ni desalojo LRU). Solo se purgan las entradas expiradas. En memoria y con un TTL de 3 minutos, no crece de forma relevante durante una sesión.
 
 ### Errores
 
@@ -78,7 +89,7 @@ Los fallos de red, HTTP o decodificación se traducen a `SearchError` en la capa
 ### Accesibilidad y localización
 
 - Inglés y español (`Localizable.xcstrings`).
-- Cada fila es un solo elemento de VoiceOver con etiqueta y pista, y el resultado de cada búsqueda se anuncia. Los layouts se adaptan a Dynamic Type grande, a iPhone en horizontal y a iPad.
+- Cada fila es un solo elemento de VoiceOver con etiqueta y pista. Los layouts se adaptan a Dynamic Type grande, a iPhone en horizontal y a iPad.
 
 ## Limitaciones conocidas
 

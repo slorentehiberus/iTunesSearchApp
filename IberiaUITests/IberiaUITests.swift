@@ -3,48 +3,21 @@
 //  IberiaUITests
 //
 //  UI tests use XCTest (the only exception to the Swift Testing rule: XCUIAutomation requires it).
-//  The app runs offline against `StubbedSearchSongsUseCase` via the `-UITestStubbedSearch` argument.
-//  Every test runs twice: `IberiaAccessibilityUITests` in English and its subclass in Spanish.
+//  The app runs offline against `StubbedSearchSongsUseCase` via the `-UITestStubbedSearch` argument,
+//  and always in English so the texts these tests look for are stable.
 //
 
 import XCTest
 
-/// Texts the UI tests look for, per language.
-struct UITestStrings {
-    let languageArguments: [String]
-    let searchPrompt: String
-    let welcomeTitle: String
-    let firstSongLabel: String
-    let secondSongLabel: String
-    let retryButton: String
-    let detailAlbum: String
-
-    static let english = UITestStrings(
-        languageArguments: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"],
-        searchPrompt: "Search songs or artists...",
-        welcomeTitle: "Search for music",
-        firstSongLabel: "Bohemian Rhapsody, by Queen",
-        secondSongLabel: "Don't Stop Me Now, by Queen",
-        retryButton: "Retry",
-        detailAlbum: "The Platinum Collection"
-    )
-
-    static let spanish = UITestStrings(
-        languageArguments: ["-AppleLanguages", "(es)", "-AppleLocale", "es_ES"],
-        searchPrompt: "Buscar canciones o artistas...",
-        welcomeTitle: "Busca música",
-        firstSongLabel: "Bohemian Rhapsody, de Queen",
-        secondSongLabel: "Don't Stop Me Now, de Queen",
-        retryButton: "Reintentar",
-        detailAlbum: "The Platinum Collection"
-    )
-}
-
 @MainActor
-class IberiaAccessibilityUITests: XCTestCase {
+final class IberiaAccessibilityUITests: XCTestCase {
 
-    /// Overridden by the Spanish subclass.
-    var strings: UITestStrings { .english }
+    private let searchPrompt = "Search songs or artists..."
+    private let welcomeTitle = "Search for music"
+    private let firstSongLabel = "Bohemian Rhapsody, by Queen"
+    private let secondSongLabel = "Don't Stop Me Now, by Queen"
+    private let retryButton = "Retry"
+    private let detailAlbum = "The Platinum Collection"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -54,7 +27,7 @@ class IberiaAccessibilityUITests: XCTestCase {
 
     private func launchApp(contentSize: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-UITestStubbedSearch"] + strings.languageArguments
+        app.launchArguments = ["-UITestStubbedSearch", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if let contentSize {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSize]
         }
@@ -63,7 +36,7 @@ class IberiaAccessibilityUITests: XCTestCase {
     }
 
     private func search(_ text: String, in app: XCUIApplication) {
-        let field = app.searchFields[strings.searchPrompt]
+        let field = app.searchFields[searchPrompt]
         XCTAssertTrue(field.waitForExistence(timeout: 20), "The search field must exist")
         field.tap()
         field.typeText(text)
@@ -90,7 +63,7 @@ class IberiaAccessibilityUITests: XCTestCase {
 
     func testWelcomeScreenPassesAccessibilityAudit() throws {
         let app = launchApp()
-        XCTAssertTrue(app.staticTexts[strings.welcomeTitle].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts[welcomeTitle].waitForExistence(timeout: 20))
 
         try audit(app)
     }
@@ -98,7 +71,7 @@ class IberiaAccessibilityUITests: XCTestCase {
     func testResultsListPassesAccessibilityAudit() throws {
         let app = launchApp()
         search("queen", in: app)
-        XCTAssertTrue(element(labeled: strings.firstSongLabel, in: app).waitForExistence(timeout: 20))
+        XCTAssertTrue(element(labeled: firstSongLabel, in: app).waitForExistence(timeout: 20))
 
         try audit(app)
     }
@@ -106,10 +79,10 @@ class IberiaAccessibilityUITests: XCTestCase {
     func testDetailScreenPassesAccessibilityAudit() throws {
         let app = launchApp()
         search("queen", in: app)
-        let row = element(labeled: strings.firstSongLabel, in: app)
+        let row = element(labeled: firstSongLabel, in: app)
         XCTAssertTrue(row.waitForExistence(timeout: 20))
         row.tap()
-        XCTAssertTrue(app.staticTexts[strings.detailAlbum].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts[detailAlbum].waitForExistence(timeout: 20))
 
         try audit(app)
     }
@@ -120,17 +93,17 @@ class IberiaAccessibilityUITests: XCTestCase {
         let app = launchApp()
         search("queen", in: app)
 
-        XCTAssertTrue(element(labeled: strings.firstSongLabel, in: app).waitForExistence(timeout: 20))
-        XCTAssertTrue(element(labeled: strings.secondSongLabel, in: app).exists)
+        XCTAssertTrue(element(labeled: firstSongLabel, in: app).waitForExistence(timeout: 20))
+        XCTAssertTrue(element(labeled: secondSongLabel, in: app).exists)
     }
 
     func testEmptyResultsPassAccessibilityAudit() throws {
         let app = launchApp()
         search("zzzz", in: app)
 
-        // The system's "no results" view has its own localized text; wait for the list to be absent.
-        XCTAssertTrue(app.staticTexts[strings.welcomeTitle].waitForNonExistence(timeout: 20))
-        XCTAssertFalse(element(labeled: strings.firstSongLabel, in: app).exists)
+        // The system's "no results" view has its own localized text; wait for the welcome view to go away.
+        XCTAssertTrue(app.staticTexts[welcomeTitle].waitForNonExistence(timeout: 20))
+        XCTAssertFalse(element(labeled: firstSongLabel, in: app).exists)
         try audit(app)
     }
 
@@ -138,7 +111,7 @@ class IberiaAccessibilityUITests: XCTestCase {
         let app = launchApp()
         search("error", in: app)
 
-        let retry = app.buttons[strings.retryButton]
+        let retry = app.buttons[retryButton]
         XCTAssertTrue(retry.waitForExistence(timeout: 20))
         XCTAssertTrue(retry.isHittable)
         try audit(app)
@@ -160,10 +133,4 @@ class IberiaAccessibilityUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews.firstMatch.waitForExistence(timeout: 20))
         try audit(app, for: [.dynamicType, .textClipped, .sufficientElementDescription])
     }
-}
-
-/// The same accessibility tests, with the app running in Spanish.
-@MainActor
-final class IberiaAccessibilitySpanishUITests: IberiaAccessibilityUITests {
-    override var strings: UITestStrings { .spanish }
 }

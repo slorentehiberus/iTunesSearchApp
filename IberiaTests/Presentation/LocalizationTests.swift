@@ -73,6 +73,6 @@ struct LocalizationTests {
         #expect(spanish["%@, by %@"] == "%@, de %@")
         #expect(spanish["Free"] == "Gratis")
         #expect(spanish["Double tap to view song details"] == "Toca dos veces para ver los detalles de la canción")
-        #expect(spanish["%lld songs found"] == "%lld canciones encontradas")
+        #expect(spanish["Searches again with the same text"] == "Repite la búsqueda con el mismo texto")
     }
 }

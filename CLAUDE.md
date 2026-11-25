@@ -38,8 +38,8 @@ Iberia/
     Network/        HTTPClientProtocol + URLSessionHTTPClient, ITunesSearchEndpoint, DataErrorMapper
     DTOs/           Decodables de la API + mapeo a entidades de Domain
     DataSources/    SongRemoteDataSource (protocolo), ITunesSongRemoteDataSource (URL, HTTP, status, decode, mapeo de errores)
-    Cache/          SongCache (protocolo), SongMemoryCache (actor, TTL + LRU), CacheClock (reloj inyectable)
-    Repositories/   RemoteSongRepository (adapta el data source) y CachedSongRepository (actor, Decorator: caché + coalescencia)
+    Cache/          SongCache (protocolo), SongMemoryCache (actor, TTL), CacheClock (reloj inyectable)
+    Repositories/   RemoteSongRepository (adapta el data source) y CachedSongRepository (struct sin estado, Decorator: solo política de caché)
   Presentation/   SwiftUI.
     Search/Views/ (SearchView, SongRowView), Search/ViewModels/ (SearchViewModel, SearchViewState, SearchError+UserMessage)
     SongDetail/ (SongDetailView, SongDetailFormatter), Components/ (ArtworkView, ScrollableStateView, Song+Artwork)
@@ -81,7 +81,7 @@ Reglas:
 - Cada celda de canción es **un solo elemento** de VoiceOver: `.accessibilityElement(children: .combine)` o `.ignore` + `accessibilityLabel` compuesto ("Título, de Artista, álbum Álbum") y `accessibilityHint` cuando aplique.
 - Imágenes decorativas (carátulas) con `.accessibilityHidden(true)`.
 - **Dynamic Type**: fuentes semánticas (`.headline`, `.subheadline`…), sin `frame(height:)` fijos ni `lineLimit` que corte texto; `@ScaledMetric` para tamaños de imagen; `ViewThatFits`/`@Environment(\.dynamicTypeSize)` para pasar de `HStack` a `VStack` en tamaños accesibilidad.
-- Estados de carga/vacío/error anunciados con labels claros; el campo de búsqueda con label e hint.
+- Estados de carga/vacío/error con textos claros; el campo de búsqueda con label e hint.
 - Textos de accesibilidad localizables.
 
 ## Testing (Swift Testing)
@@ -99,8 +99,8 @@ Reglas:
 - **Decorator:** `CachedSongRepository` (política de caché) envuelve cualquier `SongRepository`; `RemoteSongRepository` adapta un `SongRemoteDataSource`. La red (URL, HTTP, status, decode) vive solo en `ITunesSongRemoteDataSource`.
 - `HTTPClientProtocol` devuelve `(Data, HTTPURLResponse)` y lanza errores crudos; el data source los traduce con `DataErrorMapper`: `URLError(.cancelled)` → `CancellationError`; conectividad → `networkUnavailable`; HTTP no 2xx → `serverError`; `DecodingError` → `invalidResponse`; resto → `unknown(String)`.
 - **Cancelación:** `Task.checkCancellation()` justo antes y después de la llamada HTTP; nunca se cachea un error ni el resultado de una petición cancelada.
-- **Coalescencia en vuelo:** peticiones idénticas (misma `SearchQuery`) mientras otra está activa comparten una única `Task` (`Task.detached`). Se lleva un contador de esperadores: la petición compartida solo se cancela cuando se cancelan TODOS; un llamador cancelado recibe `CancellationError` aunque otros sigan esperando.
-- **Caché:** TTL 180 s, máximo 50 entradas (configurable), expiradas purgadas en cada `store`, desalojo LRU (leer cuenta como uso pero no alarga el TTL).
+- **Sin coalescencia de peticiones idénticas (decisión consciente):** el ViewModel cancela la búsqueda anterior en cada cambio y el debounce evita el solape; con un único consumidor no aporta nada y complica la cancelación. `CachedSongRepository` espera directamente al repositorio base, de modo que la cancelación se propaga por concurrencia estructurada hasta `URLSession`. No reintroducirla salvo que aparezcan varios consumidores de la misma consulta.
+- **Caché:** TTL 180 s, expiradas purgadas en cada `store`; leer no alarga el TTL. Sin límite de tamaño ni LRU (decisión consciente: el enunciado pide solo TTL y memoria).
 - DTOs con todos los campos opcionales; el mapper descarta ítems sin `trackId`/`trackName`/`artistName`. `trackPrice < 0` (no disponible) → `price` y `currencyCode` nil. El precio se convierte vía `Decimal(string:)` para no arrastrar ruido de `Double`.
 - La URL se construye con `URLComponents`; el `+` literal se escapa a `%2B`.
 
@@ -121,7 +121,6 @@ Reglas:
 
 ## Accesibilidad: implementación y verificación
 - Todos los textos de VoiceOver salen de `SongAccessibility` (label de fila "título, by artista", hint, label de carátula, hint de Retry), puro y con tests unitarios. Nunca se escriben a mano en las vistas.
-- `SearchViewState.announcement` define qué se anuncia en cada cambio de estado ("Searching songs", "N songs found", "No songs found", mensaje de error). `SearchView` lo publica con `AccessibilityNotification.Announcement` en `.onChange(of: viewModel.state)`, con prioridad baja (salvo errores) para no cortar el eco de las letras que VoiceOver lee al escribir.
 - Título del detalle con trait `.isHeader`; título+artista agrupados; carátula de lista oculta, carátula del detalle con label y trait imagen; filas de metadatos agrupadas ("Album, X").
 - Identificadores no localizados (`songRow`, `searchResultsList`, `songDetail`) para los UI tests.
 - **UI tests** (`IberiaUITests`, XCTest: único sitio donde se permite): corren offline con el argumento `-UITestStubbedSearch`, que sustituye el caso de uso por `StubbedSearchSongsUseCase` (solo `#if DEBUG`; "zzzz" → vacío, "error" → fallo, resto → 3 canciones, una con textos muy largos). Usan `performAccessibilityAudit()` en bienvenida, resultados, detalle, vacío, error y con Dynamic Type `AccessibilityXXXL`.
@@ -133,8 +132,8 @@ Reglas:
 - Fechas y precios no van en el catálogo: salen de `FormatStyle` con el `Locale` del dispositivo.
 - **Los tests unitarios corren siempre en inglés**: `Iberia.xctestplan` fija `language = en, region = US` (y desactiva el paralelo). Así las aserciones sobre texto son deterministas, y `LocalizationTests` comprueba que es así.
 - `LocalizationTests` valida el catálogo compilado: mismas claves en `en` y `es`, sin traducciones vacías y con los mismos especificadores de formato.
-- Los UI tests se ejecutan dos veces: `IberiaAccessibilityUITests` (inglés) y `IberiaAccessibilitySpanishUITests` (español, con `-AppleLanguages (es)`).
-- Si se cambia el idioma de un texto que los UI tests buscan, actualizar `UITestStrings`.
+- Los UI tests se ejecutan solo en inglés (`IberiaAccessibilityUITests`).
+- Si se cambia un texto que los UI tests buscan, actualizar las constantes al inicio de `IberiaAccessibilityUITests`.
 
 ## Accesibilidad: contraste y auditorías
 - No usar `.foregroundStyle(.secondary)` para texto: no cumple el contraste de la auditoría con texto pequeño sobre fondo blanco. Usar `.mutedText` (`Components/MutedText.swift`).

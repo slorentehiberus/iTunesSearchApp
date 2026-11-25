@@ -10,10 +10,3 @@ enum SearchViewState: Equatable, Sendable {
     /// The search failed; carries a user-facing message.
     case error(String)
 }
-
-extension SearchViewState {
-    var isError: Bool {
-        if case .error = self { return true }
-        return false
-    }
-}

@@ -15,12 +15,6 @@ struct SearchView: View {
                 .onSubmit(of: .search) {
                     viewModel.submit()
                 }
-                .onChange(of: viewModel.state) { _, newState in
-                    // VoiceOver users cannot see the screen change, so announce it.
-                    if let announcement = newState.announcement {
-                        announce(announcement, isError: newState.isError)
-                    }
-                }
         }
     }
 
@@ -66,15 +60,5 @@ struct SearchView: View {
                 }
             }
         }
-    }
-
-    /// Announcements about results are low priority so they never cut off VoiceOver
-    /// while it is echoing the letters being typed. Errors keep the default priority.
-    private func announce(_ text: String, isError: Bool) {
-        var attributed = AttributedString(text)
-        if !isError {
-            attributed.accessibilitySpeechAnnouncementPriority = .low
-        }
-        AccessibilityNotification.Announcement(attributed).post()
     }
 }
