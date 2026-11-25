@@ -4,14 +4,13 @@ import Observation
 ///
 /// - Every text change cancels the previous task immediately.
 /// - Blank text resets to `.idle` at once, with no task and no network.
-/// - Otherwise a new task waits `debounce` on the injected clock and then queries the use case.
+/// - Any other change shows `.loading` at once, so results of an earlier search are never on screen
+///   next to a newer text. A new task then waits `debounce` on the injected clock and queries the use case.
 /// - A cancelled task never touches the state: stale results can not overwrite newer ones.
 @MainActor
 @Observable
 final class SearchViewModel {
     static let defaultDebounce: Duration = .milliseconds(300)
-    /// How long a request may take before the spinner appears. Faster answers never flash it.
-    static let defaultLoadingDelay: Duration = .milliseconds(150)
 
     /// Text typed by the user. Writing to it (e.g. through `.searchable`) triggers the search.
     /// Implemented by hand so the write can start the search while staying observable.
@@ -36,18 +35,15 @@ final class SearchViewModel {
     @ObservationIgnored private let searchSongs: any SearchSongsUseCase
     @ObservationIgnored private let clock: any Clock<Duration>
     @ObservationIgnored private let debounce: Duration
-    @ObservationIgnored private let loadingDelay: Duration
 
     init(
         searchSongs: any SearchSongsUseCase,
         clock: any Clock<Duration> = ContinuousClock(),
-        debounce: Duration = SearchViewModel.defaultDebounce,
-        loadingDelay: Duration = SearchViewModel.defaultLoadingDelay
+        debounce: Duration = SearchViewModel.defaultDebounce
     ) {
         self.searchSongs = searchSongs
         self.clock = clock
         self.debounce = debounce
-        self.loadingDelay = loadingDelay
     }
 
     /// Re-runs the current search immediately (no debounce), from the error screen's Retry button.
@@ -69,6 +65,7 @@ final class SearchViewModel {
             state = .idle
             return
         }
+        state = .loading
         startSearch(after: .zero)
     }
 
@@ -79,6 +76,8 @@ final class SearchViewModel {
             state = .idle
             return
         }
+        // Whatever is on screen (results, empty or error) belongs to an older text: drop it now.
+        state = .loading
         startSearch(after: debounce)
     }
 
@@ -96,16 +95,7 @@ final class SearchViewModel {
             }
             guard !Task.isCancelled else { return }
 
-            // The spinner appears only if the request is slow, so cached or fast answers never flash it.
-            let loadingTimer = scheduleLoadingIndicator()
-            defer { loadingTimer.cancel() }
-
-            let songs = try await withTaskCancellationHandler {
-                try await searchSongs.execute(query: text)
-            } onCancel: {
-                // A cancelled search must not leave a spinner timer behind, even if the use case answers late.
-                loadingTimer.cancel()
-            }
+            let songs = try await searchSongs.execute(query: text)
             guard !Task.isCancelled else { return }
 
             state = songs.isEmpty ? .empty : .loaded(songs)
@@ -116,26 +106,5 @@ final class SearchViewModel {
             let searchError = (error as? SearchError) ?? .unknown(String(describing: error))
             state = .error(searchError.userMessage)
         }
-    }
-
-    private func scheduleLoadingIndicator() -> Task<Void, Never> {
-        let clock = clock
-        let delay = loadingDelay
-        return Task { [weak self] in
-            do {
-                try await clock.sleep(for: delay)
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            self?.beginLoading()
-        }
-    }
-
-    /// Shows the spinner only when there is nothing useful on screen. If results are already
-    /// displayed they stay until the new ones arrive, which avoids a list → spinner → list flash.
-    private func beginLoading() {
-        if case .loaded = state { return }
-        state = .loading
     }
 }

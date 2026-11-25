@@ -44,7 +44,7 @@ struct SearchViewModelTests {
         h.clock.advance(by: .milliseconds(299))
         await settle()
         #expect(await h.spy.callCount == 0)
-        #expect(h.sut.state == .idle)
+        #expect(h.sut.state == .loading)
 
         h.clock.advance(by: .milliseconds(1))
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
@@ -71,8 +71,7 @@ struct SearchViewModelTests {
         let h = makeHarness(.gated)
         await type("queen", into: h)
         await startRequest(in: h)
-        h.clock.advance(by: .milliseconds(150))
-        #expect(await waitUntil { h.sut.state == .loading })
+        #expect(h.sut.state == .loading)
 
         h.sut.searchText = ""
         #expect(h.sut.state == .idle)
@@ -123,12 +122,10 @@ struct SearchViewModelTests {
         #expect(h.sut.state == .idle)
 
         await type("queen", into: h)
-        #expect(h.sut.state == .idle) // still debouncing
+        #expect(h.sut.state == .loading) // typing already shows loading, even while debouncing
 
         await startRequest(in: h)
-        #expect(h.sut.state == .idle) // request started, spinner delay not elapsed yet
-        h.clock.advance(by: .milliseconds(150))
-        #expect(await waitUntil { h.sut.state == .loading })
+        #expect(h.sut.state == .loading) // request in flight
 
         await h.spy.release(call: 0, with: songs)
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
@@ -174,6 +171,7 @@ struct SearchViewModelTests {
         #expect(await waitUntil { h.sut.state == .error(SearchError.networkUnavailable.userMessage) })
 
         h.sut.retry()
+        #expect(h.sut.state == .loading)
 
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
         #expect(await h.spy.receivedQueries == ["queen", "queen"])
@@ -191,67 +189,60 @@ struct SearchViewModelTests {
         #expect(await h.spy.callCount == 0)
     }
 
-    @Test("Existing results stay on screen while a refined search loads (no list → spinner → list flash)")
-    func previousResultsStayWhileRefining() async {
+    // MARK: - Results of an earlier search are never shown
+
+    @Test("As soon as the text changes, the previous results leave the screen")
+    func previousResultsAreDroppedWhenTextChanges() async {
         let h = makeHarness(.gated)
         await type("queen", into: h)
-        h.clock.advance(by: .milliseconds(300))
-        #expect(await waitUntil { await h.spy.callCount == 1 })
+        await startRequest(in: h)
         await h.spy.release(call: 0, with: songs)
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
 
-        await type("queens", into: h)
-        h.clock.advance(by: .milliseconds(300))
-        #expect(await waitUntil { await h.spy.callCount == 2 })
-        #expect(h.sut.state == .loaded(songs))
+        h.sut.searchText = "queens"
+
+        #expect(h.sut.state == .loading)
+        #expect(await waitUntil { h.clock.sleeperCount == 1 }) // new debounce is running
+        await startRequest(in: h, callCount: 2)
+        #expect(h.sut.state == .loading)
 
         await h.spy.release(call: 1, with: otherSongs)
         #expect(await waitUntil { h.sut.state == .loaded(otherSongs) })
     }
 
-    // MARK: - Spinner delay
-
-    @Test("The spinner stays hidden until the request has taken longer than the loading delay")
-    func spinnerWaitsForLoadingDelay() async {
+    @Test("A previous empty result does not linger once the text changes")
+    func previousEmptyStateIsDropped() async {
         let h = makeHarness(.gated)
-        await type("queen", into: h)
+        await type("zzzz", into: h)
         await startRequest(in: h)
+        await h.spy.release(call: 0, with: [])
+        #expect(await waitUntil { h.sut.state == .empty })
 
-        h.clock.advance(by: .milliseconds(149))
-        await settle()
-        #expect(h.sut.state == .idle)
+        h.sut.searchText = "zzzzz"
 
-        h.clock.advance(by: .milliseconds(1))
-        #expect(await waitUntil { h.sut.state == .loading })
+        #expect(h.sut.state == .loading)
     }
 
-    @Test("A fast answer never shows the spinner and leaves no timer behind")
-    func fastAnswerSkipsSpinner() async {
-        let h = makeHarness(.script([.success(songs)]))
+    @Test("A previous error does not linger once the text changes")
+    func previousErrorIsDropped() async {
+        let h = makeHarness(.script([.failure(SearchError.serverError), .success(songs)]))
         await type("queen", into: h)
-
         h.clock.advance(by: .milliseconds(300))
-        #expect(await waitUntil { h.sut.state == .loaded(songs) })
-        #expect(h.clock.sleeperCount == 0)
+        #expect(await waitUntil { h.sut.state == .error(SearchError.serverError.userMessage) })
 
-        h.clock.advance(by: .milliseconds(150))
-        await settle()
-        #expect(h.sut.state == .loaded(songs))
+        h.sut.searchText = "queens"
+
+        #expect(h.sut.state == .loading)
     }
 
-    @Test("A cancelled search leaves no spinner timer behind, even if its use case answers late")
-    func cancelledSearchCancelsItsSpinnerTimer() async {
-        let h = makeHarness(.gatedIgnoringCancellation)
-        await type("queen", into: h)
-        await startRequest(in: h)
+    @Test("Editing the text repeatedly while loading keeps a single, steady loading state")
+    func typingWhileLoadingStaysLoading() async {
+        let h = makeHarness(.script([.success(songs)]))
 
-        h.sut.searchText = ""
-        await settle()
-
-        #expect(h.clock.sleeperCount == 0)
-        h.clock.advance(by: .milliseconds(150))
-        await settle()
-        #expect(h.sut.state == .idle)
+        for text in ["q", "qu", "que", "quee", "queen"] {
+            await type(text, into: h)
+            #expect(h.sut.state == .loading)
+        }
     }
 
     // MARK: - Submit
@@ -262,6 +253,7 @@ struct SearchViewModelTests {
         await type("queen", into: h)
 
         h.sut.submit()
+        #expect(h.sut.state == .loading)
 
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
         h.clock.advance(by: .milliseconds(300))

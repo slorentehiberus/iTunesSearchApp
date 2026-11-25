@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Xcode: build output and personal state
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.hmap
+*.moved-aside
+
+# Test results and archives
+*.xcresult
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Local Claude Code settings
+.claude/settings.local.json
