@@ -1,101 +1,236 @@
-# Iberia
+# iTunesSearchApp
 
-App iOS de búsqueda de canciones. Escribes y los resultados aparecen en una lista; al tocar una canción se abre su detalle.
+A native iOS song-search app. You type, results appear in a list, and tapping a song opens its detail.
 
-## API elegida
+<p>
+  <img src="docs/images/welcome.png" width="180" alt="Welcome screen">
+  <img src="docs/images/results.png" width="180" alt="Search results">
+  <img src="docs/images/detail.png" width="180" alt="Song detail">
+  <img src="docs/images/empty.png" width="180" alt="No results">
+  <img src="docs/images/error.png" width="180" alt="Error with retry">
+</p>
 
-[iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/): pública, sin clave ni registro.
+Swift 6 (strict concurrency), SwiftUI, iOS 17.6+, no third-party dependencies.
+
+## Public API
+
+[iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/): public, no key, no sign-up.
 
 ```
 https://itunes.apple.com/search?term={query}&entity=song&limit=25
 ```
 
-El filtrado lo hace el servidor. No se envía `country`, así que los resultados y los precios son de la tienda de EE. UU. (USD).
+Filtering is done by the server. No `country` is sent, so results and prices come from the US store (USD).
 
-## Cómo ejecutarla
+## How to run
 
-Requisitos: Xcode 26 y un simulador o dispositivo con iOS 17.6 o superior. Swift 6, sin dependencias externas.
-
-1. Abre `Iberia.xcodeproj`.
-2. Elige el esquema **Iberia** y un simulador.
-3. Ejecuta con ⌘R.
+1. Open `iTunesSearchApp.xcodeproj` (Xcode 26).
+2. Pick the **iTunesSearchApp** scheme and an iOS 17.6+ simulator or device.
+3. Run with ⌘R.
 
 ### Tests
 
-⌘U en Xcode, o por línea de comandos:
+⌘U in Xcode, or:
 
 ```bash
-xcodebuild test -project Iberia.xcodeproj -scheme Iberia \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:IberiaTests
+xcodebuild test -project iTunesSearchApp.xcodeproj -scheme iTunesSearchApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-- **Unitarios** (`IberiaTests`, Swift Testing): Domain, Data, Presentation y localización. No usan red ni esperas reales.
-- **UI** (`IberiaUITests`, XCTest): auditorías de accesibilidad de Apple, en inglés. Corren sin red: la app arranca con `-UITestStubbedSearch` (solo en compilaciones Debug) y usa canciones fijas.
-- `Iberia.xctestplan` fija el idioma de los tests a inglés y desactiva la ejecución en paralelo. Los tests unitarios comparan textos en inglés, así que dependen de ese plan.
+| Target | Framework | What it covers |
+|---|---|---|
+| `iTunesSearchAppTests` | Swift Testing | Domain (use case with a mocked repository), Data (cache hit, expiry, cancellation, real `URLSession` through a `URLProtocol` stub), Presentation (view model), localization. No real network, no real sleeping. |
+| `iTunesSearchAppUITests` | XCTest | Search → detail → back navigation, plus Apple's accessibility audit on every screen state and at the largest Dynamic Type size. English only. |
 
-## Arquitectura
+- UI tests run offline: the app is launched with `-UITestStubbedSearch` (Debug builds only) and uses fixed songs.
+- `iTunesSearchApp.xctestplan` forces the test language to English and disables parallel execution. The unit tests compare English texts, so they depend on that plan.
 
-Tres capas, como carpetas de un único target. Las dependencias apuntan hacia dentro: `Presentation → Domain ← Data`.
+## Requirements → where they are
+
+| Requirement | Where |
+|---|---|
+| Search screen with a text field and a results list | `SearchView` (`.searchable` + `List`) |
+| Cancel the in-flight search; never show old results | `SearchViewModel` (see [Cancellation](#cancellation)) |
+| Detail screen with 3+ fields | `SongDetailView`: album, genre, release date, duration, price |
+| Data / Domain / Presentation separation | [Architecture](#architecture) |
+| Cancellable async search | Structured concurrency from the view model down to `URLSession` |
+| Per-query cache with TTL, no network on a hit | `CachedSongRepository` + `SongMemoryCache` (3 min) |
+| Domain tests with mocked repositories | `SearchSongsUseCaseTests` + `SongRepositorySpy` |
+| Data tests for the cache | `SongMemoryCacheTests`, `CachedSongRepositoryTests` |
+| Presentation tests (optional) | `SearchViewModelTests`, formatter and accessibility tests |
+
+## Architecture
+
+Three layers in one target. Dependencies point inwards: `Presentation → Domain ← Data`. Only the composition root knows all three.
+
+```mermaid
+flowchart LR
+  subgraph PRES["Presentation (SwiftUI)"]
+    V["SearchView / SongDetailView"] --> VM["SearchViewModel"]
+  end
+  subgraph DOM["Domain (pure Swift)"]
+    UC["SearchSongsUseCase"] --> RP["SongRepository (protocol)"]
+    E["Song, SearchQuery, SearchError"]
+  end
+  subgraph DATA["Data"]
+    CR["CachedSongRepository"] --> CA["SongMemoryCache (actor)"]
+    CR --> RR["RemoteSongRepository"]
+    RR --> DS["ITunesSongRemoteDataSource"]
+    DS --> HC["URLSessionHTTPClient"]
+  end
+  VM --> UC
+  CR -. "implements" .-> RP
+```
 
 ```
-Iberia/
-  App/            IberiaApp: único sitio que conoce las tres capas y ensambla el grafo
+iTunesSearchApp/
+  App/            Composition root (builds the object graph) and the UI-test stub
   Domain/         Song, SearchQuery, SearchError, SongRepository, SearchSongsUseCase
-  Data/           Cliente HTTP, DTOs y mapper, data source de iTunes, caché, repositorios
-  Presentation/   SearchViewModel, SearchView, SongDetailView y componentes
+  Data/           HTTP client, DTOs and mapper, iTunes data source, cache, repositories
+  Presentation/   SearchViewModel, SearchView, SongDetailView and components
 ```
 
-- **Domain** no importa SwiftUI ni nada de red. Define los protocolos que Data implementa.
-- **Inyección de dependencias** por constructor, con protocolos. No hay singletons.
-- **Concurrencia (Swift 6):** las entidades son `struct` inmutables y `Sendable`, así viajan entre actores sin data races. La caché es un `actor`. El ViewModel es `@MainActor @Observable`.
-- Cadena real: `URLSessionHTTPClient → ITunesSongRemoteDataSource → RemoteSongRepository → CachedSongRepository(SongMemoryCache) → DefaultSearchSongsUseCase → SearchViewModel → SearchView`.
+- **Domain** imports neither SwiftUI nor anything network-related. It defines the protocols that Data implements, so the dependency points at Domain.
+- **Dependency injection** through initializers with protocols. No singletons.
+- **Swift 6:** entities are immutable `Sendable` structs, the cache is an `actor`, the view model is `@MainActor @Observable`.
+- **Real graph:** `URLSessionHTTPClient → ITunesSongRemoteDataSource → RemoteSongRepository → CachedSongRepository(SongMemoryCache) → DefaultSearchSongsUseCase → SearchViewModel → SearchView`.
 
-## Decisiones principales
+### One search, end to end
 
-### Cancelación
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant V as SearchView
+  participant M as SearchViewModel
+  participant C as UseCase
+  participant R as CachedSongRepository
+  participant K as SongMemoryCache
+  participant N as DataSource + URLSession
+  U->>V: types "queen"
+  V->>M: searchText changes
+  M->>M: cancel previous task, state = loading
+  M->>M: wait 300 ms (injected clock)
+  M->>C: execute("queen")
+  C->>C: SearchQuery normalizes the text
+  C->>R: searchSongs
+  R->>K: cachedSongs
+  alt valid entry
+    K-->>R: songs
+  else missing or expired
+    K-->>R: nil
+    R->>N: fetchSongs
+    N-->>R: songs
+    R->>K: store
+  end
+  R-->>C: songs
+  C-->>M: de-duplicated by id
+  M->>V: state = loaded
+```
 
-- Cada vez que cambia el texto, el ViewModel cancela la tarea anterior al instante.
-- Si el texto queda vacío, vuelve al estado inicial sin lanzar tarea ni red.
-- Si no, espera 300 ms (debounce) sobre un reloj inyectable y entonces consulta el caso de uso.
-- Tras cada `await` se comprueba `Task.isCancelled`: un resultado de una búsqueda cancelada nunca llega a la pantalla, aunque el caso de uso conteste tarde. Una `CancellationError` nunca se muestra como error.
-- En cuanto el texto cambia a una búsqueda válida, la pantalla pasa a "cargando" y se descartan los resultados anteriores (también un estado vacío o un error). Así, lo que se ve siempre corresponde al texto actual y nunca se muestran resultados de una búsqueda anterior.
-- La cancelación se propaga hasta `URLSession` (`URLError(.cancelled)` se traduce a `CancellationError`).
+### Screen states
 
-### Caché
+The search screen is always in exactly one of five states (`SearchViewState`), so impossible combinations cannot exist.
 
-- En memoria, indexada por `SearchQuery`: texto con espacios recortados y colapsados y en minúsculas. No se pliegan los diacríticos, porque "cafe" y "café" pueden devolver resultados distintos.
-- **TTL de 3 minutos**, configurable por constructor. Una entrada con vida igual al TTL ya está expirada.
-- Entrada válida → se devuelve **sin llamada de red**. Ausente o expirada → red, y se actualiza la caché.
-- Solo se cachean respuestas correctas, nunca errores ni resultados de peticiones canceladas.
-- El tiempo viene de un reloj inyectable (`CacheClock`), así los tests comprueban la expiración en milisegundos.
-- El decorador `CachedSongRepository` no tiene estado propio: espera directamente al repositorio que envuelve, así que cancelar la tarea que llama cancela toda la cadena hasta la petición de red (hay un test que lo demuestra con un `URLSession` real).
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> loading: valid text
+  loading --> loaded: results
+  loading --> empty: no results
+  loading --> error: failure
+  loaded --> loading: text changes
+  empty --> loading: text changes
+  error --> loading: text changes or Retry
+  loaded --> idle: blank text
+  loading --> idle: blank text
+  empty --> idle: blank text
+  error --> idle: blank text
+```
 
-### Qué no se ha hecho a propósito
+| State | What the user sees |
+|---|---|
+| `idle` | "Search for music" prompt |
+| `loading` | Progress indicator |
+| `loaded` | List of songs |
+| `empty` | "No results" view |
+| `error` | Localized message and a **Retry** button |
 
-Dos mejoras habituales que se descartaron para mantener el código claro, porque el enunciado pide una prueba simple:
+Every arrow into `loading` drops the previous list, empty view or error. Old results are never visible while a new search is pending.
 
-- **No se agrupan las peticiones idénticas simultáneas** ("coalescencia": si llegan dos búsquedas iguales mientras una está en vuelo, compartir una sola llamada de red). Aquí no aportaría nada:
-  - El ViewModel cancela la búsqueda anterior en cada cambio de texto, y la nueva espera 300 ms de debounce. Cuando esta llega al repositorio, la anterior ya está cancelada: no se solapan.
-  - No hay otros consumidores (precarga, widgets, varias pantallas) que pidan la misma consulta a la vez. El único caso de solape es pulsar Enter con la red lenta y el mismo texto, y el coste es una petición repetida.
-  - Añadirla obligaría a compartir la tarea entre llamadores, con un contador de esperadores y cancelación manual. Sin ella, la cancelación la resuelve la concurrencia estructurada y es mucho más fácil de razonar.
-  - Si la app tuviera varios consumidores de la misma consulta, sería el momento de añadirla.
-- **No hay límite de tamaño en la caché** (ni desalojo LRU). Solo se purgan las entradas expiradas. En memoria y con un TTL de 3 minutos, no crece de forma relevante durante una sesión.
+## Decisions
 
-### Errores
+### Cancellation
 
-Los fallos de red, HTTP o decodificación se traducen a `SearchError` en la capa Data. La interfaz muestra un mensaje localizado y un botón para reintentar.
+- Every text change cancels the previous task immediately. Blank text goes back to `idle` with no task and no network.
+- Otherwise the new task waits 300 ms (debounce) on an injected `Clock`, then calls the use case.
+- After each `await` the task checks `Task.isCancelled`: a result from a cancelled search never reaches the screen, even if it arrives late. A `CancellationError` is never shown as an error.
+- Cancellation reaches the network: `URLError(.cancelled)` is mapped to `CancellationError` in Data, and a test with a real `URLSession` proves the request is actually stopped.
 
-### Accesibilidad y localización
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant M as ViewModel
+  participant R as Repository chain
+  participant S as URLSession
+  U->>M: types "queen"
+  M->>R: request A in flight
+  R->>S: GET queen
+  U->>M: changes to "abba"
+  M->>M: cancel task A
+  S-->>R: URLError cancelled
+  R-->>M: CancellationError, ignored
+  M->>M: state = loading, new task B
+  M->>R: request B
+  R->>S: GET abba
+  S-->>R: abba results
+  R-->>M: abba
+  M->>M: state = loaded, only abba
+```
 
-- Inglés y español (`Localizable.xcstrings`).
-- Cada fila es un solo elemento de VoiceOver con etiqueta y pista. Los layouts se adaptan a Dynamic Type grande, a iPhone en horizontal y a iPad.
+### Cache
 
-## Limitaciones conocidas
+- In memory, keyed by `SearchQuery`: trimmed, inner whitespace collapsed, lowercased. Diacritics are **not** folded: "cafe" and "café" can return different results from the server, so they get different entries.
+- **TTL: 3 minutes**, configurable through the initializer. An entry whose age equals the TTL is already expired.
+- Time comes from an injected `CacheClock`, so tests check expiry in milliseconds.
+- Only successful responses are cached: never errors, never the result of a cancelled request.
 
-- Sin paginación: máximo 25 resultados por búsqueda.
-- Sin `country` en la petición: precios siempre en USD.
-- `URLSessionHTTPClient` no tiene tests: es el único código que toca la red real.
-- La carátula del detalle pide una versión más grande cambiando `100x100bb` por `600x600bb` en la URL, algo que depende del formato de la CDN de Apple.
-- Las auditorías de accesibilidad solo se han pasado en modo claro, y las traducciones al español no las ha revisado una persona nativa.
-- Las auditorías exentan dos controles del propio iOS (el botón de borrar de la barra de búsqueda y la barra de predicciones del teclado), que la app no puede modificar.
+```mermaid
+flowchart TD
+  A["searchSongs(query)"] --> B{"cachedSongs(query)"}
+  B -- "valid entry" --> C["return songs, NO network"]
+  B -- "missing" --> D["fetch from network"]
+  B -- "expired: removed" --> D
+  D --> E{"task cancelled?"}
+  E -- "yes" --> F["throw CancellationError, do not cache"]
+  E -- "no" --> G["store + return"]
+```
+
+`CachedSongRepository` is a stateless decorator around any `SongRepository`: it only decides cache or network. It awaits the wrapped repository directly, so cancelling the caller cancels the whole chain down to the request.
+
+### Errors
+
+Network, HTTP and decoding failures are translated to `SearchError` in the Data layer. The UI never sees a raw error: it shows a localized message and a Retry button.
+
+### Accessibility and localization
+
+- English and Spanish (`Localizable.xcstrings`); a test checks both languages have the same keys and format specifiers.
+- Each row is a single VoiceOver element with a label and hint; artwork is hidden from VoiceOver; errors are announced.
+- Dynamic Type: layouts switch from horizontal to vertical stacks at accessibility sizes. Contrast is checked by the accessibility audit.
+- The layout also adapts to iPhone landscape and iPad (content width is limited on large screens, and on iPad the search field is pinned under the title instead of floating in the corner).
+
+### Left out on purpose
+
+The brief says the exercise should be simple, so these common extras were considered and dropped:
+
+- **Request coalescing** (sharing one network call between identical simultaneous requests). The view model cancels the previous search on every change and the debounce prevents overlap, so there is a single consumer and nothing to share. It would also complicate cancellation. It would make sense if several consumers asked for the same query.
+- **Cache size limit / LRU.** Only expired entries are purged. With in-memory storage and a 3-minute TTL the cache does not grow meaningfully during a session.
+- **Pagination.** The API returns up to 25 songs and the brief does not ask for more.
+- **Image caching.** Artwork uses `AsyncImage` with the system's HTTP cache; the exercise asks for a search-result cache only.
+
+## Known limitations
+
+- No pagination: at most 25 results per search.
+- No `country` in the request: prices are always USD.
+- The detail artwork is requested in a larger size by replacing `100x100bb` with `600x600bb` in Apple's CDN URL, which depends on that URL format.
+- Accessibility audits were only run in light mode. The Spanish translations have not been reviewed by a native speaker.
+- The audits exempt two iOS-owned controls the app cannot change: the search field's clear button and the keyboard's prediction bar.
