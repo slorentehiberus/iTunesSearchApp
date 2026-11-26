@@ -59,34 +59,7 @@ flowchart LR
 - **Domain** is pure Swift and defines the protocols Data implements. Each module exposes only what the composition root needs; the rest is `internal` and tested with `@testable`.
 - Dependencies are injected through initializers; no singletons. Entities are immutable `Sendable` structs, the cache is an `actor`, the view model is `@MainActor @Observable`.
 - Network, HTTP and decoding failures become a typed `SearchError` in Data; the UI only shows a localized message and a Retry button.
-
-### One search, end to end
-
-```mermaid
-sequenceDiagram
-  actor U as User
-  participant M as SearchViewModel
-  participant C as UseCase
-  participant R as CachedSongRepository
-  participant K as SongMemoryCache
-  participant N as DataSource + URLSession
-  U->>M: types "queen"
-  M->>M: cancel previous task, state = loading
-  M->>M: wait 300 ms (injected clock)
-  M->>C: execute("queen")
-  C->>R: searchSongs(SearchQuery)
-  R->>K: cachedSongs
-  alt valid entry
-    K-->>R: songs
-  else missing or expired
-    R->>N: fetchSongs
-    N-->>R: songs
-    R->>K: store
-  end
-  R-->>C: songs
-  C-->>M: de-duplicated by id
-  M->>M: state = loaded
-```
+- **One search:** the view model cancels the previous task and waits 300 ms; the use case turns the text into a `SearchQuery` and calls `CachedSongRepository`, which answers from the cache or goes to the network (see [Cache](#cache)).
 
 ### Screen states
 
