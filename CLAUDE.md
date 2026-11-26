@@ -123,7 +123,7 @@ Reglas:
 - Todos los textos de VoiceOver salen de `SongAccessibility` (label de fila "título, by artista", hint, label de carátula, hint de Retry), puro y con tests unitarios. Nunca se escriben a mano en las vistas.
 - Título del detalle con trait `.isHeader`; título+artista agrupados; carátula de lista oculta, carátula del detalle con label y trait imagen; filas de metadatos agrupadas ("Album, X").
 - Identificadores no localizados (`songRow`, `searchResultsList`, `songDetail`) para los UI tests.
-- **UI tests** (`iTunesSearchAppUITests`, XCTest: único sitio donde se permite): corren offline con el argumento `-UITestStubbedSearch`, que sustituye el caso de uso por `StubbedSearchSongsUseCase` (solo `#if DEBUG`; "zzzz" → vacío, "error" → fallo, resto → 3 canciones, una con textos muy largos). Usan `performAccessibilityAudit()` en bienvenida, resultados, detalle, vacío, error y con Dynamic Type `AccessibilityXXXL`.
+- **UI tests** (`iTunesSearchAppUITests`, XCTest: único sitio donde se permite): corren offline con el argumento `-UITestStubbedSearch`, que sustituye el caso de uso por `StubbedSearchSongsUseCase` (solo `#if DEBUG`; "zzzz" → vacío, "error" → fallo, resto → 3 canciones, una con textos muy largos). Usan `performAccessibilityAudit()` en bienvenida, resultados, detalle, vacío, error y con Dynamic Type `AccessibilityXXXL`; además un test de navegación (buscar → detalle → volver).
 - Los UI tests exigen un simulador funcionando; sin él solo se puede comprobar que compilan.
 
 ## Localización (inglés + español)
@@ -132,8 +132,8 @@ Reglas:
 - Fechas y precios no van en el catálogo: salen de `FormatStyle` con el `Locale` del dispositivo.
 - **Los tests unitarios corren siempre en inglés**: `iTunesSearchApp.xctestplan` fija `language = en, region = US` (y desactiva el paralelo). Así las aserciones sobre texto son deterministas, y `LocalizationTests` comprueba que es así.
 - `LocalizationTests` valida el catálogo compilado: mismas claves en `en` y `es`, sin traducciones vacías y con los mismos especificadores de formato.
-- Los UI tests se ejecutan solo en inglés (`iTunesSearchAppAccessibilityUITests`).
-- Si se cambia un texto que los UI tests buscan, actualizar las constantes al inicio de `iTunesSearchAppAccessibilityUITests`.
+- Los UI tests se ejecutan solo en inglés (`AccessibilityUITests`, en `iTunesSearchAppUITests/iTunesSearchAppUITests.swift`).
+- Si se cambia un texto que los UI tests buscan, actualizar las constantes al inicio de `AccessibilityUITests`.
 
 ## Accesibilidad: contraste y auditorías
 - No usar `.foregroundStyle(.secondary)` para texto: no cumple el contraste de la auditoría con texto pequeño sobre fondo blanco. Usar `.mutedText` (`Components/MutedText.swift`).
@@ -143,5 +143,5 @@ Reglas:
 ## Notas posteriores
 - `SearchView` anuncia a VoiceOver **solo los errores** (`AccessibilityNotification.Announcement` en `.onChange(of: viewModel.state)`): el foco se queda en el campo de búsqueda y un fallo pasaría inadvertido. Resultados y vacío no se anuncian (decisión consciente).
 - Las filas añaden `accessibilityInputLabels([title])` para Control por voz.
-- `.searchable` usa `placement: .navigationBarDrawer(displayMode: .always)`: en iPad la colocación por defecto es una pastilla pequeña arriba a la derecha, separada del título. Verificado con capturas en iPad (A16, iOS 26.4) en vertical.
-- Anchura en pantallas grandes: `readableContentWidth(_:)` (`Components/ReadableContentWidth.swift`) limita y centra el contenido (lista 700 pt, detalle 900 pt, escalados con Dynamic Type). Sin efecto en iPhone. Solo compilado; falta revisarlo a mano en iPad.
+- `.searchable` usa `placement: .navigationBarDrawer(displayMode: .always)` **solo en iPad** (`SearchView.searchPlacement`): allí la colocación por defecto es una pastilla pequeña arriba a la derecha, separada del título. En iPhone se mantiene la colocación por defecto: con el drawer fijo la auditoría de accesibilidad marcaba el campo como recortado y cortaba el título de bienvenida con Dynamic Type máximo. Batería completa (unitarios + UI) pasada en iPhone 17 y en iPad (A16, iOS 26.4).
+- Anchura en pantallas grandes: `readableContentWidth(_:)` (`Components/ReadableContentWidth.swift`) limita y centra el contenido (lista 700 pt, detalle 900 pt, escalados con Dynamic Type). Sin efecto en iPhone. Los tests pasan en iPad; la revisión visual en horizontal, Split View y Slide Over sigue pendiente.
