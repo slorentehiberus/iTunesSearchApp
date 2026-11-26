@@ -25,7 +25,7 @@ App iOS de búsqueda de canciones sobre la iTunes Search API (`https://itunes.ap
 - **Decisiones conscientes, no reintroducir:** sin coalescencia de peticiones idénticas (un solo consumidor, el debounce evita el solape y complicaría la cancelación), sin LRU ni límite de tamaño, sin segunda llamada `/lookup` para el detalle (la búsqueda ya trae todo lo que muestra), sin paginación.
 
 ## Presentation
-- `SearchViewModel`: `searchText` con accessors manuales (`access`/`withMutation`) para lanzar la búsqueda al escribir y seguir observable. Cada cambio **cancela `searchTask` al instante**; texto en blanco → `.idle` sin tarea ni red; si no, `.loading` **de inmediato** (nunca se ven resultados, vacío o error de un texto anterior) y un `Task` con debounce de 300 ms sobre el `Clock` inyectado.
+- `SearchViewModel`: `searchText` lanza la búsqueda desde su `didSet` (solo si el valor cambia). Cada cambio **cancela `searchTask` al instante**; texto en blanco → `.idle` sin tarea ni red; si no, `.loading` **de inmediato** (nunca se ven resultados, vacío o error de un texto anterior) y un `Task` con debounce de 300 ms sobre el `Clock` inyectado.
 - Tras cada `await` se comprueba `Task.isCancelled`; un resultado obsoleto jamás pisa el estado y `CancellationError` nunca produce `.error`. `retry()` y `submit()` buscan sin debounce.
 - Estado: `SearchViewState` (`idle`, `loading`, `loaded`, `empty`, `error(String)`). La UI recibe `SearchError.userMessage` localizado, nunca errores crudos.
 - **VoiceOver anuncia el resultado de cada búsqueda** (número de canciones, vacío, error) vía `AccessibilityAnnouncer` inyectable; una búsqueda cancelada u obsoleta no anuncia nada.

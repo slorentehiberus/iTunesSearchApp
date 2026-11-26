@@ -13,24 +13,15 @@ import Observation
 public final class SearchViewModel {
     static let defaultDebounce: Duration = .milliseconds(300)
 
-    /// Text typed by the user. Writing to it (e.g. through `.searchable`) triggers the search.
-    /// Implemented by hand so the write can start the search while staying observable.
-    var searchText: String {
-        get {
-            access(keyPath: \.searchText)
-            return storedSearchText
-        }
-        set {
-            guard newValue != storedSearchText else { return }
-            withMutation(keyPath: \.searchText) { storedSearchText = newValue }
-            searchTextDidChange()
+    /// Text typed by the user. Writing a different value to it (e.g. through `.searchable`) starts a search.
+    var searchText = "" {
+        didSet {
+            if searchText != oldValue { searchTextDidChange() }
         }
     }
 
     private(set) var state: SearchViewState = .idle
 
-
-    @ObservationIgnored private var storedSearchText = ""
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private let searchSongs: any SearchSongsUseCase
     @ObservationIgnored private let clock: any Clock<Duration>
