@@ -14,7 +14,6 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let price: Decimal?
     /// ISO 4217 code (e.g. "USD") that gives `price` its meaning; `nil` whenever `price` is `nil`.
     public let currencyCode: String?
-    public let previewURL: URL?
     public let durationMilliseconds: Int?
 
     public init(
@@ -27,7 +26,6 @@ public struct Song: Identifiable, Hashable, Sendable {
         artworkURL: URL? = nil,
         price: Decimal? = nil,
         currencyCode: String? = nil,
-        previewURL: URL? = nil,
         durationMilliseconds: Int? = nil
     ) {
         self.id = id
@@ -39,7 +37,6 @@ public struct Song: Identifiable, Hashable, Sendable {
         self.artworkURL = artworkURL
         self.price = price
         self.currencyCode = currencyCode
-        self.previewURL = previewURL
         self.durationMilliseconds = durationMilliseconds
     }
 }

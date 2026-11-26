@@ -27,9 +27,8 @@ public final class SearchViewModel {
         }
     }
 
-    private(set) var state: ViewState = .idle
+    private(set) var state: SearchViewState = .idle
 
-    typealias ViewState = SearchViewState
 
     @ObservationIgnored private var storedSearchText = ""
     @ObservationIgnored private var searchTask: Task<Void, Never>?

@@ -13,7 +13,6 @@ struct ITunesTrackDTO: Decodable, Sendable {
     let primaryGenreName: String?
     let releaseDate: Date?
     let artworkUrl100: String?
-    let previewUrl: String?
     let trackPrice: Double?
     let currency: String?
     let trackTimeMillis: Int?

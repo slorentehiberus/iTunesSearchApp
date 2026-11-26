@@ -24,17 +24,21 @@ struct ITunesSongMapperTests {
         #expect(first.currencyCode == "USD")
         #expect(first.durationMilliseconds == 355145)
         #expect(first.artworkURL?.absoluteString.hasSuffix("100x100bb.jpg") == true)
-        #expect(first.previewURL?.host() == "audio-ssl.itunes.apple.com")
         #expect(first.releaseDate == ISO8601DateFormatter().date(from: "1975-10-31T12:00:00Z"))
     }
 
     @Test("Optional fields missing in the payload map to nil")
     func missingOptionalFieldsAreNil() throws {
-        let result = try songs(from: ITunesFixtures.realSample)
+        let result = try songs(from: ITunesFixtures.response(trackIDs: [1]))
 
-        let second = try #require(result.last)
-        #expect(second.previewURL == nil)
-        #expect(second.price == Decimal(string: "1.29"))
+        let song = try #require(result.first)
+        #expect(song.album == nil)
+        #expect(song.genre == nil)
+        #expect(song.releaseDate == nil)
+        #expect(song.artworkURL == nil)
+        #expect(song.price == nil)
+        #expect(song.currencyCode == nil)
+        #expect(song.durationMilliseconds == nil)
     }
 
     @Test("Items missing id, title or artist are dropped; the rest keep their order")
@@ -56,7 +60,7 @@ struct ITunesSongMapperTests {
     func priceIsExact() {
         let track = ITunesTrackDTO(
             trackId: 1, trackName: "T", artistName: "A", collectionName: nil,
-            primaryGenreName: nil, releaseDate: nil, artworkUrl100: nil, previewUrl: nil,
+            primaryGenreName: nil, releaseDate: nil, artworkUrl100: nil,
             trackPrice: 0.99, currency: "EUR", trackTimeMillis: nil
         )
 

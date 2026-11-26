@@ -3,7 +3,6 @@ import Foundation
 
 /// Top-level payload of `https://itunes.apple.com/search`.
 struct ITunesSearchResponseDTO: Decodable, Sendable {
-    let resultCount: Int
     let results: [ITunesTrackDTO]
 }
 

@@ -28,7 +28,6 @@ enum ITunesSongMapper {
             price: price,
             // The code is only meaningful together with a price.
             currencyCode: price == nil ? nil : track.currency,
-            previewURL: track.previewUrl.flatMap(URL.init(string:)),
             durationMilliseconds: track.trackTimeMillis
         )
     }
