@@ -226,9 +226,11 @@ The brief says the exercise should be simple, so these common extras were consid
 - **Cache size limit / LRU.** Only expired entries are purged. With in-memory storage and a 3-minute TTL the cache does not grow meaningfully during a session.
 - **Pagination.** The API returns up to 25 songs and the brief does not ask for more.
 - **Image caching.** Artwork uses `AsyncImage` with the system's HTTP cache; the exercise asks for a search-result cache only.
+- **A second API call for the detail** (iTunes `/lookup`). The detail screen receives the song the search already returned, because the search response contains everything it shows: album, genre, release date, duration and price. A `/lookup` call would add no data. It would add latency, a loading/error/retry state and task cancellation to the detail screen, make it fail offline even though the list loaded, and need more tests. It would make sense if the detail needed data the list does not carry (for example an album's track list), or if it had to open from an id without going through the list.
 
 ## Known limitations
 
+- **Layers are folders of a single target**, so the dependency rule (`Presentation → Domain ← Data`) is kept by convention and by review, not enforced by the compiler. The next step would be splitting them into modules of a local Swift package, so that `Presentation` physically cannot import `Data`. That was left out because it means making every cross-layer type `public`, moving the String Catalog to a module bundle (a missing translation would silently fall back to English) and splitting the tests across several targets: a large change for an exercise that asks for "layers or modules".
 - No pagination: at most 25 results per search.
 - No `country` in the request: prices are always USD.
 - The detail artwork is requested in a larger size by replacing `100x100bb` with `600x600bb` in Apple's CDN URL, which depends on that URL format.
