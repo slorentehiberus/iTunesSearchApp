@@ -29,7 +29,7 @@ App iOS de búsqueda de canciones sobre la iTunes Search API (`https://itunes.ap
 - Tras cada `await` se comprueba `Task.isCancelled`; un resultado obsoleto jamás pisa el estado y `CancellationError` nunca produce `.error`. `retry()` y `submit()` buscan sin debounce.
 - Estado: `SearchViewState` (`idle`, `loading`, `loaded`, `empty`, `error(String)`). La UI recibe `SearchError.userMessage` localizado, nunca errores crudos.
 - **VoiceOver anuncia el resultado de cada búsqueda** (número de canciones, vacío, error) vía `AccessibilityAnnouncer` inyectable; una búsqueda cancelada u obsoleta no anuncia nada.
-- Layout adaptativo: `AnyLayout` según `dynamicTypeSize.isAccessibilitySize` y size classes; tamaños con `@ScaledMetric`, sin `frame` fijos en texto. En iPad el campo de búsqueda va bajo el título (`.navigationBarDrawer`); en iPhone, colocación por defecto (con el drawer fijo la auditoría lo marca recortado).
+- Layout adaptativo: `AnyLayout` según `dynamicTypeSize.isAccessibilitySize` y size classes; tamaños con `@ScaledMetric`, sin `frame` fijos en texto. Con ancho regular (iPad, `horizontalSizeClass`) el campo de búsqueda va bajo el título (`.navigationBarDrawer`); con ancho compacto, colocación por defecto (con el drawer fijo en iPhone la auditoría lo marca recortado). Sin UIKit en Presentation.
 - Fuentes semánticas. **No usar `.foregroundStyle(.secondary)` para texto** (contraste): usar `.mutedText`.
 
 ## Accesibilidad

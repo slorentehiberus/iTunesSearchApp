@@ -1,10 +1,10 @@
 import Domain
 import SwiftUI
-import UIKit
 
 /// Search screen: native search field plus one clearly distinct view per `SearchViewState`.
 public struct SearchView: View {
     @Bindable var viewModel: SearchViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     public init(viewModel: SearchViewModel) {
         self.viewModel = viewModel
@@ -17,12 +17,12 @@ public struct SearchView: View {
                 .navigationDestination(for: Song.self) { song in
                     SongDetailView(song: song)
                 }
-                // On iPad the default placement is a small floating field in the top-right corner, so it is
-                // pinned under the title there. On iPhone the default placement is kept: it is the one that
-                // passes the accessibility audit at every Dynamic Type size.
+                // With regular width (iPad) the default placement is a small floating field in the top-right
+                // corner, so it is pinned under the title there. With compact width the default placement is
+                // kept: it is the one that passes the accessibility audit at every Dynamic Type size.
                 .searchable(
                     text: $viewModel.searchText,
-                    placement: Self.searchPlacement,
+                    placement: searchPlacement,
                     prompt: Text("Search songs or artists...", bundle: .module)
                 )
                 .onSubmit(of: .search) {
@@ -31,8 +31,8 @@ public struct SearchView: View {
         }
     }
 
-    private static var searchPlacement: SearchFieldPlacement {
-        UIDevice.current.userInterfaceIdiom == .pad ? .navigationBarDrawer(displayMode: .always) : .automatic
+    private var searchPlacement: SearchFieldPlacement {
+        horizontalSizeClass == .regular ? .navigationBarDrawer(displayMode: .always) : .automatic
     }
 
     @ViewBuilder
