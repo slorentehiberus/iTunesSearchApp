@@ -5,8 +5,11 @@
 //  Created by Sara Lorente on 25/11/2026.
 //
 
-import SwiftUI
+import Data
+import Domain
 import Foundation
+import Presentation
+import SwiftUI
 
 /// Composition root: the only place that knows every layer and wires the dependency graph.
 @main

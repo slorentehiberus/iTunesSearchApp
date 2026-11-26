@@ -1,32 +1,49 @@
 {
-  "configurations": [
+  "configurations" : [
     {
-      "id": "6F5D3A52-3B7A-4F3E-9D55-2A0B7C1E9A10",
-      "name": "English",
-      "options": {}
+      "id" : "6F5D3A52-3B7A-4F3E-9D55-2A0B7C1E9A10",
+      "name" : "English",
+      "options" : {
+
+      }
     }
   ],
-  "defaultOptions": {
-    "language": "en",
-    "region": "US"
+  "defaultOptions" : {
+    "language" : "en",
+    "region" : "US"
   },
-  "testTargets": [
+  "testTargets" : [
     {
-      "parallelizable": false,
-      "target": {
-        "containerPath": "container:iTunesSearchApp.xcodeproj",
-        "identifier": "7DD901B730B6D76F0016F00F",
-        "name": "iTunesSearchAppTests"
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Packages\/SearchKit",
+        "identifier" : "DomainTests",
+        "name" : "DomainTests"
       }
     },
     {
-      "parallelizable": false,
-      "target": {
-        "containerPath": "container:iTunesSearchApp.xcodeproj",
-        "identifier": "7DD901C130B6D76F0016F00F",
-        "name": "iTunesSearchAppUITests"
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Packages\/SearchKit",
+        "identifier" : "DataTests",
+        "name" : "DataTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Packages\/SearchKit",
+        "identifier" : "PresentationTests",
+        "name" : "PresentationTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:iTunesSearchApp.xcodeproj",
+        "identifier" : "7DD901C130B6D76F0016F00F",
+        "name" : "iTunesSearchAppUITests"
       }
     }
   ],
-  "version": 1
+  "version" : 1
 }

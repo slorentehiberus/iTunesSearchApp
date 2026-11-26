@@ -1,4 +1,5 @@
 #if DEBUG
+import Domain
 import Foundation
 
 /// Offline, deterministic use case for UI tests (`-UITestStubbedSearch` launch argument).

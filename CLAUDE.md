@@ -13,6 +13,7 @@ App iOS nativa de búsqueda de canciones sobre la iTunes Search API. Estas regla
 - `SWIFT_VERSION = 6.0` en los 3 targets (implica concurrencia estricta completa).
 - `IPHONEOS_DEPLOYMENT_TARGET = 17.6` en todos los targets.
 - `SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated` para que `Domain` y `Data` no queden aislados a `MainActor`. El aislamiento a `@MainActor` se declara explícitamente en `Presentation`.
+- En el paquete esos ajustes se reproducen en `layerSettings` de `Package.swift` (modo Swift 6, `NonisolatedNonsendingByDefault`, `InferIsolatedConformances`, `MemberImportVisibility`) y se aplican a todos los módulos y targets de test. Un módulo nuevo debe usar `layerSettings`.
 
 ## Domain: decisiones de concurrencia
 - Entidades y value objects: `struct` inmutables (`let`), `Sendable`, `Hashable`. Sin `@unchecked Sendable`.
@@ -27,9 +28,13 @@ App iOS nativa de búsqueda de canciones sobre la iTunes Search API. Estas regla
 ## Arquitectura (Clean Architecture)
 Dependencias solo hacia dentro: `Presentation → Domain ← Data`. `App` (composition root) es el único que conoce las tres.
 
+**Las capas son módulos de un paquete local** (`Packages/SearchKit`, módulos `Domain`, `Data`, `Presentation`), así que el compilador impone la regla: `Presentation` y `Data` dependen solo de `Domain` (ver `Package.swift`). Lo que cruza módulos es `public` (tipos, inicializadores y miembros que usa el composition root); lo demás es `internal` y los tests lo alcanzan con `@testable import`. Los archivos de Data y Presentation necesitan `import Domain` explícito. El paquete solo compila para iOS (Presentation usa UIKit).
+
 ```
-iTunesSearchApp/
-  App/            iTunesSearchAppApp (composition root / DI), StubbedSearchSongsUseCase (solo DEBUG, para UI tests)
+iTunesSearchApp/                      Target de la app: composición, assets, InfoPlist.xcstrings
+  iTunesSearchAppApp                  composition root / DI
+  App/StubbedSearchSongsUseCase       solo DEBUG, para UI tests
+Packages/SearchKit/Sources/
   Domain/         Swift puro. Sin SwiftUI, sin URLSession, sin Foundation de red.
     Entities/       Song (struct Sendable, Identifiable, Equatable)
     Repositories/   Protocolos (SongRepository)
@@ -43,7 +48,8 @@ iTunesSearchApp/
   Presentation/   SwiftUI.
     Search/Views/ (SearchView, SongRowView), Search/ViewModels/ (SearchViewModel, SearchViewState, SearchError+UserMessage)
     SongDetail/ (SongDetailView, SongDetailFormatter), Components/ (ArtworkView, ScrollableStateView, Song+Artwork)
-iTunesSearchAppTests/      Refleja la estructura: Domain/, Data/, Presentation/, Support/ (mocks, fakes, reloj manual)
+Packages/SearchKit/Tests/  DomainTests/, DataTests/, PresentationTests/ y TestSupport/ (spies, fixtures, reloj manual y `waitUntil` compartidos)
+iTunesSearchAppUITests/    UI tests (XCTest)
 ```
 
 Reglas:
@@ -87,13 +93,15 @@ Reglas:
 ## Testing (Swift Testing)
 - `@Suite` por tipo bajo prueba; `@Test` con nombres descriptivos; `#expect`/`#require`.
 - Prohibido `sleep` real y esperas largas: usar un **reloj manual** (`ManualClock: Clock`) en `Support/` que avanza el tiempo de forma determinista; TTL y debounce se prueban en milisegundos.
+- Los helpers de `TestSupport` son `nonisolated` por defecto; los que reciben cierres no `Sendable` desde un test `@MainActor` (`waitUntil`, `settle`) se declaran `nonisolated(nonsending)` para ejecutarse en el aislamiento de quien llama.
 - Mocks/fakes escritos a mano (sin librerías): `HTTPClientSpy` que cuenta llamadas y reproduce pasos, `SongRepositoryStub`, etc.
 - Casos obligatorios: caché hit sin red; caché expirada → red; normalización de query; cancelación de búsqueda previa; resultado obsoleto no pisa al nuevo; debounce colapsa pulsaciones rápidas.
 
 ## Flujo de trabajo
 - Antes de codificar una capa, explicar brevemente el diseño. Implementar de dentro hacia fuera: Domain → Data → Presentation → App.
 - Cada pieza nueva viene con sus tests.
-- Las carpetas del target usan *synchronized groups* de Xcode: los archivos creados en disco entran solos al target. No editar `project.pbxproj` a mano salvo para los ajustes de build indicados arriba.
+- Las carpetas del target de la app usan *synchronized groups* de Xcode: los archivos creados en disco entran solos al target. Los archivos del paquete los gestiona SwiftPM. No editar `project.pbxproj` a mano salvo para los ajustes de build indicados arriba.
+- **Abrir `iTunesSearchApp.xcworkspace`, no el `.xcodeproj`.** El workspace contiene el proyecto y el paquete; solo así Xcode ofrece los tests del paquete en el plan de pruebas. Los tests de las capas se añaden al plan desde Xcode (Choose Targets…), no a mano.
 
 ## Data: decisiones
 - **Decorator:** `CachedSongRepository` (política de caché) envuelve cualquier `SongRepository`; `RemoteSongRepository` adapta un `SongRemoteDataSource`. La red (URL, HTTP, status, decode) vive solo en `ITunesSongRemoteDataSource`.
@@ -127,11 +135,12 @@ Reglas:
 - Los UI tests exigen un simulador funcionando; sin él solo se puede comprobar que compilan.
 
 ## Localización (inglés + español)
-- `iTunesSearchApp/Localizable.xcstrings` (idioma fuente `en`, traducción `es`), con `es` en `knownRegions`. Toda cadena nueva de UI, de VoiceOver o de mensajes de error debe añadirse al catálogo en **ambos** idiomas: si falta una, el test de completitud falla.
+- `Packages/SearchKit/Sources/Presentation/Resources/Localizable.xcstrings` (idioma fuente `en`, traducción `es`). **Todo texto se busca en el bundle del módulo**: `String(localized: "...", bundle: .module)`, `Text("...", bundle: .module)`; los literales sueltos (`navigationTitle("…")`, `ContentUnavailableView("…")`, `Button("…")`) buscan en el bundle de la app y NO traducen, así que se usan sus variantes con `Text(…, bundle: .module)`. Si falla, no hay error: se ve el texto en inglés.
+- **`iTunesSearchApp/InfoPlist.xcstrings` es imprescindible**: es lo que declara la app como localizada en `en` y `es`. Sin él la app no tiene recursos en español propios e iOS se queda en inglés aunque el dispositivo esté en español, y ningún test lo detecta (comprobado en el simulador). No borrarlo. Toda cadena nueva de UI, de VoiceOver o de mensajes de error debe añadirse al catálogo en **ambos** idiomas: si falta una, el test de completitud falla.
 - Interpolaciones: la clave es el formato (`"%@, by %@"`, `"%lld songs found"`); el español debe conservar los mismos especificadores.
 - Fechas y precios no van en el catálogo: salen de `FormatStyle` con el `Locale` del dispositivo.
-- **Los tests unitarios corren siempre en inglés**: `iTunesSearchApp.xctestplan` fija `language = en, region = US` (y desactiva el paralelo). Así las aserciones sobre texto son deterministas, y `LocalizationTests` comprueba que es así.
-- `LocalizationTests` valida el catálogo compilado: mismas claves en `en` y `es`, sin traducciones vacías y con los mismos especificadores de formato.
+- **Los tests unitarios corren siempre en inglés**: `iTunesSearchApp.xctestplan` fija `language = en, region = US` (y desactiva el paralelo); para ejecutar solo el paquete a mano hace falta `-testLanguage en -testRegion US`. Así las aserciones sobre texto son deterministas, y `LocalizationTests` comprueba que es así.
+- `LocalizationTests` valida el catálogo compilado del módulo (`Bundle.presentation`, interno a Presentation): mismas claves en `en` y `es`, sin traducciones vacías y con los mismos especificadores de formato.
 - Los UI tests se ejecutan solo en inglés (`AccessibilityUITests`, en `iTunesSearchAppUITests/iTunesSearchAppUITests.swift`).
 - Si se cambia un texto que los UI tests buscan, actualizar las constantes al inicio de `AccessibilityUITests`.
 
@@ -141,7 +150,7 @@ Reglas:
 - Pendiente de auditar: modo oscuro.
 
 ## Notas posteriores
-- `SearchView` anuncia a VoiceOver **solo los errores** (`AccessibilityNotification.Announcement` en `.onChange(of: viewModel.state)`): el foco se queda en el campo de búsqueda y un fallo pasaría inadvertido. Resultados y vacío no se anuncian (decisión consciente).
+- **VoiceOver anuncia el resultado de cada búsqueda** ("N songs found" / "1 song found", "No songs found" y el mensaje de error), igual que las demás prácticas comparadas: el foco se queda en el campo de búsqueda y el cambio pasaría inadvertido. Lo hace `SearchViewModel` a través de un `AccessibilityAnnouncer` inyectable (`SystemAccessibilityAnnouncer` en producción, `RecordingAnnouncer` en tests), con los textos en `SongAccessibility`. Una búsqueda cancelada u obsoleta no anuncia nada. Antes solo se anunciaban los errores; se cambió a propósito.
 - Las filas añaden `accessibilityInputLabels([title])` para Control por voz.
 - `.searchable` usa `placement: .navigationBarDrawer(displayMode: .always)` **solo en iPad** (`SearchView.searchPlacement`): allí la colocación por defecto es una pastilla pequeña arriba a la derecha, separada del título. En iPhone se mantiene la colocación por defecto: con el drawer fijo la auditoría de accesibilidad marcaba el campo como recortado y cortaba el título de bienvenida con Dynamic Type máximo. Batería completa (unitarios + UI) pasada en iPhone 17 y en iPad (A16, iOS 26.4).
 - Anchura en pantallas grandes: `readableContentWidth(_:)` (`Components/ReadableContentWidth.swift`) limita y centra el contenido (lista 700 pt, detalle 900 pt, escalados con Dynamic Type). Sin efecto en iPhone. Los tests pasan en iPad; la revisión visual en horizontal, Split View y Slide Over sigue pendiente.
