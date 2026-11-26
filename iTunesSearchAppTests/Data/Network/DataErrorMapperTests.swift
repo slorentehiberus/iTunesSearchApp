@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 @Suite("DataErrorMapper")
 struct DataErrorMapperTests {

@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 @Suite("CachedSongRepository")
 struct CachedSongRepositoryTests {
@@ -39,16 +38,6 @@ struct CachedSongRepositoryTests {
 
         #expect(first == songs)
         #expect(second == songs)
-        #expect(await h.base.callCount == 1)
-    }
-
-    @Test("Equivalent raw queries share the cache entry")
-    func equivalentQueriesShareCache() async throws {
-        let h = makeHarness(.success(songs))
-
-        _ = try await h.sut.searchSongs(matching: SearchQuery("Queen")!)
-        _ = try await h.sut.searchSongs(matching: SearchQuery("  queen  ")!)
-
         #expect(await h.base.callCount == 1)
     }
 

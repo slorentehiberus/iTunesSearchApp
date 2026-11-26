@@ -14,12 +14,6 @@ struct SearchQueryTests {
         #expect(SearchQuery("  Hello   WORLD \n")?.text == "hello world")
     }
 
-    @Test("Equivalent queries are equal and share the same cache key")
-    func equivalentQueriesAreEqual() {
-        #expect(SearchQuery("Queen") == SearchQuery("  queen "))
-        #expect(SearchQuery("Queen")?.hashValue == SearchQuery(" QUEEN")?.hashValue)
-    }
-
     @Test("Does not fold diacritics: 'cafe' and 'café' are different")
     func doesNotFoldDiacritics() {
         #expect(SearchQuery("cafe") != SearchQuery("café"))

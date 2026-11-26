@@ -4,7 +4,8 @@
 //
 //  UI tests use XCTest (the only exception to the Swift Testing rule: XCUIAutomation requires it).
 //  The app runs offline against `StubbedSearchSongsUseCase` via the `-UITestStubbedSearch` argument,
-//  and always in English so the texts these tests look for are stable.
+//  and in English so the texts these tests look for are stable. The one exception is
+//  `testAppIsLocalizedInSpanish`, which guards the Spanish localization end to end.
 //
 
 import XCTest
@@ -115,6 +116,19 @@ final class AccessibilityUITests: XCTestCase {
         XCTAssertTrue(retry.waitForExistence(timeout: 20))
         XCTAssertTrue(retry.isHittable)
         try audit(app)
+    }
+
+    // MARK: - Localization
+
+    /// The String Catalog lives in a package module, so nothing but a real launch proves the app
+    /// actually shows Spanish: without `InfoPlist.xcstrings` the app silently stays in English.
+    func testAppIsLocalizedInSpanish() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestStubbedSearch", "-AppleLanguages", "(es)", "-AppleLocale", "es_ES"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Busca música"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.searchFields["Buscar canciones o artistas..."].exists)
     }
 
     // MARK: - Navigation

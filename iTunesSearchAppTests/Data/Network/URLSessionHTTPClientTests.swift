@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 /// Runs the real `URLSessionHTTPClient` against a stubbed `URLProtocol`.
 /// This is the only code that talks to the network, so it is also where cancellation is proven end to end.

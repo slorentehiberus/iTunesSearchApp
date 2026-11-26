@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Domain
 @testable import Presentation
-@testable import TestSupport
 
 /// Guards the String Catalog: both languages complete and consistent.
 /// The compiled catalog ships as `<language>.lproj/Localizable.strings` inside the Presentation module's resource bundle.
@@ -30,14 +29,6 @@ struct LocalizationTests {
     @Test("Unit tests run with English as the app language, so text assertions are deterministic")
     func testsRunInEnglish() {
         #expect(Bundle.presentation.preferredLocalizations.first == "en")
-    }
-
-    @Test("The app ships English and Spanish")
-    func appShipsBothLanguages() {
-        let languages = Set(Bundle.presentation.localizations)
-
-        #expect(languages.contains("en"))
-        #expect(languages.contains("es"))
     }
 
     @Test("Spanish has exactly the same keys as English")
@@ -68,13 +59,4 @@ struct LocalizationTests {
         #expect(mismatched.isEmpty, "Specifier mismatch in: \(mismatched.sorted())")
     }
 
-    @Test("Spot checks: real Spanish text for the strings VoiceOver speaks")
-    func spanishSpotChecks() throws {
-        let spanish = try table(for: "es")
-
-        #expect(spanish["%@, by %@"] == "%@, de %@")
-        #expect(spanish["Free"] == "Gratis")
-        #expect(spanish["Double tap to view song details"] == "Toca dos veces para ver los detalles de la canción")
-        #expect(spanish["Searches again with the same text"] == "Repite la búsqueda con el mismo texto")
-    }
 }

@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 @Suite("iTunes DTO decoding and mapping")
 struct ITunesSongMapperTests {

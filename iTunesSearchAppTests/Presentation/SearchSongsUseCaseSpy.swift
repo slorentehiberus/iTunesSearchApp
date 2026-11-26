@@ -1,6 +1,5 @@
 @testable import Domain
 @testable import Presentation
-@testable import TestSupport
 
 /// Test double for `SearchSongsUseCase`. Records every call and lets the test decide how and when each one ends.
 actor SearchSongsUseCaseSpy: SearchSongsUseCase {

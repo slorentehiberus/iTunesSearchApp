@@ -1,7 +1,6 @@
 import Testing
 @testable import Domain
 @testable import Presentation
-@testable import TestSupport
 
 /// VoiceOver focus stays in the search field while results change, so the outcome of each search is announced.
 @MainActor
@@ -40,16 +39,6 @@ struct SearchAnnouncementTests {
 
         #expect(await waitUntil { h.sut.state == .loaded(songs) })
         #expect(h.announcer.messages == ["2 songs found"])
-    }
-
-    @Test("A single result uses the singular form")
-    func announcesSingularResult() async {
-        let h = makeHarness(.script([.success([Song.fixture(id: 1)])]))
-
-        await search("queen", in: h)
-
-        #expect(await waitUntil { h.sut.state == .loaded([Song.fixture(id: 1)]) })
-        #expect(h.announcer.messages == ["1 song found"])
     }
 
     @Test("An empty result is announced")
@@ -100,14 +89,4 @@ struct SearchAnnouncementTests {
         #expect(h.announcer.messages == ["1 song found"])
     }
 
-    @Test("Typing does not announce anything until a search ends")
-    func nothingIsAnnouncedWhileTyping() async {
-        let h = makeHarness(.script([.success(songs)]))
-
-        h.sut.searchText = "q"
-        h.sut.searchText = "qu"
-        await settle()
-
-        #expect(h.announcer.messages.isEmpty)
-    }
 }

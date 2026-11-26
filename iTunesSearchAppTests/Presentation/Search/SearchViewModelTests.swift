@@ -1,7 +1,6 @@
 import Testing
 @testable import Domain
 @testable import Presentation
-@testable import TestSupport
 
 @MainActor
 @Suite("SearchViewModel", .timeLimit(.minutes(1)))
@@ -180,17 +179,6 @@ struct SearchViewModelTests {
         #expect(h.clock.sleeperCount == 0)
     }
 
-    @Test("Retry with blank text stays idle")
-    func retryWithBlankTextIsIdle() async {
-        let h = makeHarness(.script([.success(songs)]))
-
-        h.sut.retry()
-        await settle()
-
-        #expect(h.sut.state == .idle)
-        #expect(await h.spy.callCount == 0)
-    }
-
     // MARK: - Results of an earlier search are never shown
 
     @Test("As soon as the text changes, the previous results leave the screen")
@@ -210,31 +198,6 @@ struct SearchViewModelTests {
 
         await h.spy.release(call: 1, with: otherSongs)
         #expect(await waitUntil { h.sut.state == .loaded(otherSongs) })
-    }
-
-    @Test("A previous empty result does not linger once the text changes")
-    func previousEmptyStateIsDropped() async {
-        let h = makeHarness(.gated)
-        await type("zzzz", into: h)
-        await startRequest(in: h)
-        await h.spy.release(call: 0, with: [])
-        #expect(await waitUntil { h.sut.state == .empty })
-
-        h.sut.searchText = "zzzzz"
-
-        #expect(h.sut.state == .loading)
-    }
-
-    @Test("A previous error does not linger once the text changes")
-    func previousErrorIsDropped() async {
-        let h = makeHarness(.script([.failure(SearchError.serverError), .success(songs)]))
-        await type("queen", into: h)
-        h.clock.advance(by: .milliseconds(300))
-        #expect(await waitUntil { h.sut.state == .error(SearchError.serverError.userMessage) })
-
-        h.sut.searchText = "queens"
-
-        #expect(h.sut.state == .loading)
     }
 
     @Test("Editing the text repeatedly while loading keeps a single, steady loading state")

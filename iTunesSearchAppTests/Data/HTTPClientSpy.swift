@@ -1,7 +1,6 @@
 import Foundation
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 /// Test double for `HTTPClientProtocol`: counts calls and plays back scripted steps.
 /// When the script runs out, the last step repeats.

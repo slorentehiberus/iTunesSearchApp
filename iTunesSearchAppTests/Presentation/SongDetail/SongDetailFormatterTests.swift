@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Domain
 @testable import Presentation
-@testable import TestSupport
 
 @Suite("SongDetailFormatter")
 struct SongDetailFormatterTests {

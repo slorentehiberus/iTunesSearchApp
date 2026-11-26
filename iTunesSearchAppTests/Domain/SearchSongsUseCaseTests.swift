@@ -1,6 +1,5 @@
 import Testing
 @testable import Domain
-@testable import TestSupport
 
 @Suite("DefaultSearchSongsUseCase")
 struct SearchSongsUseCaseTests {

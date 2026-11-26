@@ -6,6 +6,7 @@ import PackageDescription
 //   Presentation ──▶ Domain ◀── Data
 //
 // Domain depends on nothing. The app target is the only one that knows all three layers.
+// The unit tests live in the Xcode project (iTunesSearchAppTests), which imports the modules with @testable.
 let package = Package(
     name: "SearchKit",
     defaultLocalization: "en",
@@ -24,18 +25,6 @@ let package = Package(
             resources: [.process("Resources")],
             swiftSettings: layerSettings
         ),
-
-        // Test helpers shared by the test targets of several layers.
-        .target(
-            name: "TestSupport",
-            dependencies: ["Domain"],
-            path: "Tests/TestSupport",
-            swiftSettings: layerSettings
-        ),
-
-        .testTarget(name: "DataTests", dependencies: ["Data", "Domain", "TestSupport"], swiftSettings: layerSettings),
-        .testTarget(name: "PresentationTests", dependencies: ["Presentation", "Domain", "TestSupport"], swiftSettings: layerSettings),
-        .testTarget(name: "DomainTests", dependencies: ["Domain", "TestSupport"], swiftSettings: layerSettings),
     ],
     swiftLanguageModes: [.v6]
 )

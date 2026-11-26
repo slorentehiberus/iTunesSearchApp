@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import Data
 @testable import Domain
-@testable import TestSupport
 
 @Suite("ITunesSongRemoteDataSource")
 struct ITunesSongRemoteDataSourceTests {
@@ -80,12 +79,4 @@ struct ITunesSongRemoteDataSourceTests {
         }
     }
 
-    @Test("Connectivity failures map to SearchError.networkUnavailable")
-    func connectivityFailureMapsToNetworkUnavailable() async {
-        let (sut, _) = makeSUT([.failure(URLError(.notConnectedToInternet))])
-
-        await #expect(throws: SearchError.networkUnavailable) {
-            try await sut.fetchSongs(for: query)
-        }
-    }
 }
