@@ -119,6 +119,10 @@ The brief asks for a simple exercise, so these were considered and dropped:
 - **Cache size limit, pagination, image caching:** only expired entries are purged (3 min TTL), the API returns up to 25 songs, and artwork uses `AsyncImage`.
 - **A second API call for the detail (`/lookup`):** the search response already has everything the detail shows, so a second call would add only latency, loading/error states, cancellation, a failure when offline and more tests.
 
+## How it was built
+
+Built with an AI coding assistant (Claude Code); `CLAUDE.md` holds the conventions I gave it. I set the requirements, chose between its proposals, reviewed the code and ran the tests and the app myself.
+
 ## Known limitations
 
 - At most 25 results per search; prices are always USD. The detail artwork depends on Apple's `100x100bb` URL format.

@@ -52,5 +52,5 @@ App iOS de búsqueda de canciones sobre la iTunes Search API (`https://itunes.ap
 - Explicar brevemente el diseño antes de codificar; de dentro hacia fuera: Domain → Data → Presentation → App. Cada pieza nueva viene con sus tests.
 - Las carpetas del target de la app y de los tests usan *synchronized groups*: los archivos entran solos. No editar `project.pbxproj` a mano salvo para ajustes de build.
 - Un solo simulador a la vez; no compilar Release salvo que se pida.
-- **Commits sin ninguna atribución a Claude** (sin `Co-Authored-By` ni "Generated with"); solo se commitea cuando se pide.
+- Los commits van a nombre del autor del repositorio, sin líneas `Co-Authored-By`; el uso del asistente se documenta en el README. Solo se commitea cuando se pide.
 - Verificado en simuladores: iOS 26.4 (iPhone 17 y iPad, claro y oscuro) e iOS 17.5 (iPhone 15, con el objetivo bajado a 17.0). Sin verificar: dispositivo real, VoiceOver real, Release, iPad en horizontal y Split View.
