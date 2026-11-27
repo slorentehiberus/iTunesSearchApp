@@ -122,5 +122,5 @@ The brief asks for a simple exercise, so these were considered and dropped:
 ## Known limitations
 
 - At most 25 results per search; prices are always USD. The detail artwork depends on Apple's `100x100bb` URL format.
-- Accessibility audits ran in light mode only and exempt two iOS-owned controls (the search field's clear button and the keyboard's prediction bar). Spanish has not been reviewed by a native speaker.
-- The package targets iOS only (`Presentation` uses UIKit).
+- Verified on simulators only: iOS 26.4 (iPhone 17 and iPad, light and dark mode) and iOS 17.5 (iPhone 15, with the deployment target lowered to 17.0); not on a real device or on iOS 17.6 to 25. The accessibility audits exempt anything inside the system search field and the keyboard, which the app cannot change. Spanish has not been reviewed by a native speaker.
+- The package targets iOS only.
