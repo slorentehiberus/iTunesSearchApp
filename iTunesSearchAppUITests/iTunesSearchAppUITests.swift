@@ -49,14 +49,23 @@ final class AccessibilityUITests: XCTestCase {
             .firstMatch
     }
 
-    /// Runs Apple's accessibility audit. Only two controls owned by iOS itself are exempt, because the app
-    /// can not change them: the search field's clear button and the keyboard's prediction bar.
-    /// Every other issue, including any other hit-area or description problem, still fails the test.
+    /// Runs Apple's accessibility audit. Issues whose element sits inside two areas owned by iOS itself are
+    /// exempt, because the app can not change them: the system search field (with its clear button) and the
+    /// keyboard (with the prediction bar just above it). They are recognised by position and not by class name,
+    /// which differs between iOS versions. Every other issue, anywhere else on screen, still fails the test.
     private func audit(_ app: XCUIApplication, for types: XCUIAccessibilityAuditType = .all) throws {
         try app.performAccessibilityAudit(for: types) { issue in
-            let description = issue.detailedDescription
-            return description.contains("_UITextFieldClearButton")
-                || description.contains("TUIPredictionViewCell")
+            guard let element = issue.element else { return false }
+            let frame = element.frame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+
+            let searchField = app.searchFields.firstMatch
+            if searchField.exists, searchField.frame.insetBy(dx: -24, dy: -24).contains(center) { return true }
+
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists, keyboard.frame.insetBy(dx: 0, dy: -60).contains(center) { return true }
+
+            return false
         }
     }
 
@@ -150,9 +159,20 @@ final class AccessibilityUITests: XCTestCase {
 
     // MARK: - Dynamic Type
 
+    func testWelcomeAndErrorAuditAtLargestAccessibilityTextSize() throws {
+        let app = launchApp(contentSize: "UICTContentSizeCategoryAccessibilityXXXL")
+        XCTAssertTrue(app.staticTexts[welcomeTitle].waitForExistence(timeout: 20))
+        try audit(app, for: [.dynamicType, .textClipped, .sufficientElementDescription])
+
+        search("error", in: app)
+        XCTAssertTrue(app.buttons[retryButton].waitForExistence(timeout: 20))
+        try audit(app, for: [.dynamicType, .textClipped, .sufficientElementDescription])
+    }
+
     func testResultsAndDetailAuditAtLargestAccessibilityTextSize() throws {
         let app = launchApp(contentSize: "UICTContentSizeCategoryAccessibilityXXXL")
-        search("queen", in: app)
+        // "long" returns only the song with very long texts, so its row is on screen at any text size.
+        search("long", in: app)
 
         let longTitleRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@", "A Very Long Song Title"))

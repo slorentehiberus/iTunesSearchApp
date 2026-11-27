@@ -11,7 +11,7 @@ App iOS de búsqueda de canciones sobre la iTunes Search API (`https://itunes.ap
 ## Arquitectura
 `Presentation → Domain ← Data`, cada capa un **módulo del paquete local `Packages/SearchKit`**, así que el compilador impone la regla (`Presentation` y `Data` dependen solo de `Domain`). La app (`iTunesSearchApp/`) es el único composition root y conoce las tres.
 - Lo que cruza módulos es `public`; lo demás, `internal` y los tests lo alcanzan con `@testable import`. Data y Presentation necesitan `import Domain` explícito (y `import Foundation` donde se use: `MemberImportVisibility`).
-- Módulos nuevos usan `layerSettings` de `Package.swift`. El paquete solo compila para iOS (Presentation usa UIKit).
+- Módulos nuevos usan `layerSettings` de `Package.swift`. El paquete es solo iOS (`platforms: [.iOS(.v17)]`).
 - Programar contra protocolos (`SongRepository`, `HTTPClientProtocol`, `SongCache`, `CacheClock`). Inyección por constructor, sin singletons. Un tipo por archivo.
 - Grafo real: `URLSessionHTTPClient → ITunesSongRemoteDataSource → RemoteSongRepository → CachedSongRepository(SongMemoryCache) → DefaultSearchSongsUseCase → SearchViewModel → SearchView`.
 
@@ -46,7 +46,7 @@ App iOS de búsqueda de canciones sobre la iTunes Search API (`https://itunes.ap
 - `iTunesSearchApp.xctestplan` fija inglés (`en/US`) y desactiva el paralelo: los tests unitarios comparan textos en inglés. Los UI tests también van en inglés, salvo `testAppIsLocalizedInSpanish`.
 - Prohibido `sleep` real: `ManualClock` y `ManualCacheClock` avanzan el tiempo a mano; `waitUntil` espera estado y `settle()` comprueba que algo NO ocurre (ambos `nonisolated(nonsending)`). Fakes escritos a mano (`SongRepositorySpy`, `SearchSongsUseCaseSpy`, `HTTPClientSpy`, `RecordingAnnouncer`, `StubURLProtocol`), sin librerías.
 - Casos obligatorios: caché hit sin red; caché expirada → red; normalización de query; cancelación de la búsqueda previa (también contra una `URLSession` real); resultado obsoleto no pisa al nuevo; debounce colapsa pulsaciones rápidas. No añadir tests que solo repitan una constante o la cobertura de otro.
-- UI tests offline con `-UITestStubbedSearch` (`StubbedSearchSongsUseCase`, solo `#if DEBUG`: "zzzz" → vacío, "error" → fallo, resto → 3 canciones). Usan `performAccessibilityAudit` vía el helper `audit(_:for:)`, que solo exime dos controles de iOS (`_UITextFieldClearButton`, `TUIPredictionViewCell`).
+- UI tests offline con `-UITestStubbedSearch` (`StubbedSearchSongsUseCase`, solo `#if DEBUG`: "zzzz" → vacío, "error" → fallo, "long" → solo la canción de textos muy largos, resto → 3 canciones). Usan `performAccessibilityAudit` vía el helper `audit(_:for:)`, que exime los fallos dentro de dos contenedores de iOS (el campo de búsqueda del sistema y el teclado), reconocidos por su posición en pantalla y no por nombre de clase, que cambia entre versiones de iOS.
 
 ## Flujo de trabajo
 - Explicar brevemente el diseño antes de codificar; de dentro hacia fuera: Domain → Data → Presentation → App. Cada pieza nueva viene con sus tests.

@@ -43,6 +43,8 @@ public struct SearchView: View {
                 ContentUnavailableView {
                     Label {
                         Text("Search for music", bundle: .module)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "music.note.list")
                     }
@@ -74,6 +76,8 @@ public struct SearchView: View {
                 ContentUnavailableView {
                     Label {
                         Text("Something went wrong", bundle: .module)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle")
                     }

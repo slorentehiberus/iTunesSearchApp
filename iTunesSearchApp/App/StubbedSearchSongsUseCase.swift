@@ -5,7 +5,8 @@ import Foundation
 /// Offline, deterministic use case for UI tests (`-UITestStubbedSearch` launch argument).
 /// Never compiled into release builds.
 ///
-/// - "zzzz" → no results, "error" → a server error, anything else → three songs.
+/// - "zzzz" → no results, "error" → a server error, "long" → only the song with very long texts,
+///   anything else → three songs.
 struct StubbedSearchSongsUseCase: SearchSongsUseCase {
     func execute(query: String) async throws -> [Song] {
         switch SearchQuery(query)?.text {
@@ -15,6 +16,8 @@ struct StubbedSearchSongsUseCase: SearchSongsUseCase {
             return []
         case "error":
             throw SearchError.serverError
+        case "long":
+            return Array(Self.songs.suffix(1))
         default:
             return Self.songs
         }
